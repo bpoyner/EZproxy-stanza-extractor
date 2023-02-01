@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
 """
-    stanza.py - brandon poyner
+    stanza.py
+    
+    (C) 2023 Brandon Poyner
+    Released under MIT License 
 
     Extracts database stanzas from the EZproxy website to save as local files
 
