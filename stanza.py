@@ -26,7 +26,8 @@ stanza_file_permissions = {
                'file_group': '',
                'file_mode': 644 } 
 }
-general_settings = { 'debug': False }
+general_settings = { 'debug': False,
+                     'fetch_delay_seconds': 2}
 if os.name == 'posix':
     general_settings['stanza_directory'] = '/usr/local/ezproxy/databases'
     general_settings['directory_sep'] = '/'
@@ -42,7 +43,7 @@ class Stanzas:
         self.url=url
         self.success=0
 
-class file_permissions:
+class File_permissions:
     def __init__(self, perms):
         if os.name == 'posix':
             self.owner = perms['posix']['file_owner']
@@ -168,7 +169,7 @@ def fetch_stanzas(urls):
                 continue
             if (not req.ok):
                 stanza.err_msg="Error: Request for URL {0} not successful".format(url)
-                time.sleep(2)
+                time.sleep(general_settings['fetch_delay_seconds'])
                 continue
             stanza.success=1
             break
@@ -197,7 +198,8 @@ def fetch_stanzas(urls):
         stanza.outfile=includefile
         if current_url_count < total_url_count:
             # as this is a web crawl, pause between requests
-            time.sleep(2)
+            debug("Delaying {0} seconds between requests".format(general_settings['fetch_delay_seconds']))
+            time.sleep(general_settings['fetch_delay_seconds'])
             current_url_count += 1
 
 def write_outfile(outfile,stanza,permissions):
@@ -260,6 +262,7 @@ def main(argv):
     parser.add_option("-f", "--outfile", dest='outputfile', metavar='[output file]', type='string', action='store', help="output stanzas in singular file")
     parser.add_option("-d", "--outdir", dest='outputdir', metavar='[output directory]', type='string', action='store', help="output stanza directory")
     parser.add_option("-u", "--url", dest='url', metavar='<url>', type='string', action='append', help="URL of stanza to extract")
+    parser.add_option("--delay", dest='delay', metavar='[seconds]', type='int', action='store', help="Delay between fetch requests")
     parser.add_option("--debug", dest='debug', action='store_true', help="display debug information")
     group = optparse.OptionGroup(parser, "Posix options", "Options for Unix-like systems")
     group.add_option("-o", "--owner", dest='f_owner', metavar='[file owner]', type='string', action='store', help="owner of output files")
@@ -284,6 +287,8 @@ def main(argv):
         stanza_file_permissions['posix']['file_mode']=options.f_permission
     if (options.outputdir):
         general_settings['stanza_directory']=options.outputdir
+    if (options.delay):
+        general_settings['fetch_delay_seconds']=options.delay
     if (options.debug):
         general_settings['debug']=options.debug
 
@@ -296,7 +301,7 @@ def main(argv):
         parser.print_help()
         sys.exit(1)
 
-    permissions=file_permissions(stanza_file_permissions)
+    permissions=File_permissions(stanza_file_permissions)
     check_permissions(permissions)
     fetch_stanzas(urls)
     output_stanzas(outfile,permissions)
