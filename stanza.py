@@ -47,13 +47,13 @@ class Stanzas:
 class File_permissions:
     def __init__(self, perms):
         if os.name == 'posix':
-            self.uid(perms['posix']['file_owner'])
-            self.gid(perms['posix']['file_group'])
-            self.omode(perms['posix']['file_mode'])
+            self.get_uid(perms['posix']['file_owner'])
+            self.get_gid(perms['posix']['file_group'])
+            self.get_mode(perms['posix']['file_mode'])
 
     if os.name == 'posix':
         # Permissions for Unix-like systems
-        def uid(self,owner):
+        def get_uid(self,owner):
             if not owner:
                 return -1
             try:
@@ -62,7 +62,7 @@ class File_permissions:
             except:
                 uid = -2
             self.uid = uid
-        def gid(self,group):
+        def get_gid(self,group):
             if not group:
                 return -1
             try:
@@ -71,7 +71,7 @@ class File_permissions:
             except:
                 gid = -2
             self.gid = gid
-        def omode(self,mode):
+        def get_mode(self,mode):
             if not mode:
                 return -1
             elif isinstance(mode, str):
@@ -86,7 +86,7 @@ class File_permissions:
             else:
                 # Mode is something else we can't handle
                 mode = -1
-            self.omode = mode
+            self.mode = mode
 
 def debug(message):
     # Display debug messages if requested
@@ -121,7 +121,7 @@ def check_permissions(permissions):
         if permissions.gid == -2:
             sys.stderr.write("Error: No such group {0}{1}".format(permissions.group,os.linesep))
             sys.exit(1)
-        if permissions.omode == -1:
+        if permissions.mode == -1:
             sys.stderr.write("Error: Could not parse file mode {0}{1}".format(permissions.mode,os.linesep))
             sys.exit(1)
 
@@ -130,12 +130,12 @@ def set_stanza_permissions(file,permissions):
         # Only attempt to set file permissions on Unix-like systems
         error=0
         try:
-            if permissions.omode >= 0:
-                os.chmod(file,permissions.omode)
+            if permissions.mode >= 0:
+                os.chmod(file,permissions.mode)
             else:
                 raise Exception("Invalid permission")
         except:
-            sys.stderr.write("Warning: Could not change file permissions to {0}{1}".format(str(permissions.omode),os.linesep))
+            sys.stderr.write("Warning: Could not change file permissions to {0}{1}".format(str(permissions.mode),os.linesep))
             error+=1
         try:
             os.chown(file,permissions.uid,permissions.gid)
