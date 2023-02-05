@@ -27,7 +27,8 @@ stanza_file_permissions = {
                'file_mode': 644 } 
 }
 general_settings = { 'debug': False,
-                     'fetch_delay_seconds': 2}
+                     'fetch_delay_seconds': 2,
+                     'fetch_retry_count': 3}
 if os.name == 'posix':
     general_settings['stanza_directory'] = '/usr/local/ezproxy/databases'
     general_settings['directory_sep'] = '/'
@@ -46,43 +47,46 @@ class Stanzas:
 class File_permissions:
     def __init__(self, perms):
         if os.name == 'posix':
-            self.owner = perms['posix']['file_owner']
-            self.group = perms['posix']['file_group']
-            self.mode = perms['posix']['file_mode']
+            self.uid(perms['posix']['file_owner'])
+            self.gid(perms['posix']['file_group'])
+            self.omode(perms['posix']['file_mode'])
+
     if os.name == 'posix':
         # Permissions for Unix-like systems
-        def uid(self):
-            if not self.owner:
+        def uid(self,owner):
+            if not owner:
                 return -1
             try:
                 # Get UID from username
-                uid = pwd.getpwnam(self.owner).pw_uid
+                uid = pwd.getpwnam(owner).pw_uid
             except:
                 uid = -2
-            return uid
-        def gid(self):
-            if not self.group:
+            self.uid = uid
+        def gid(self,group):
+            if not group:
                 return -1
             try:
                 # Get GID from groupname
-                gid = grp.getgrnam(self.group).gr_gid
+                gid = grp.getgrnam(group).gr_gid
             except:
                 gid = -2
-            return gid
-        def omode(self):
-            if isinstance(self.mode, str):
+            self.gid = gid
+        def omode(self,mode):
+            if not mode:
+                return -1
+            elif isinstance(mode, str):
                 # Mode is a string, convert to octal
                 try:
-                    mode=int(self.mode,base=8)
+                    mode=int(mode,base=8)
                 except:
                     mode = -1
-            elif isinstance(self.mode, int):
+            elif isinstance(mode, int):
                 # Mode is an integer, convert to octal
-                mode=int(str(self.mode),base=8)
+                mode=int(str(mode),base=8)
             else:
                 # Mode is something else we can't handle
                 mode = -1
-            return mode
+            self.omode = mode
 
 def debug(message):
     # Display debug messages if requested
@@ -111,11 +115,14 @@ def stanza_check(stanza):
 
 def check_permissions(permissions):
     if os.name == 'posix':
-        if permissions.owner and permissions.uid() == -2:
+        if permissions.uid == -2:
             sys.stderr.write("Error: No such owner {0}{1}".format(permissions.owner,os.linesep))
             sys.exit(1)
-        if permissions.group and permissions.gid() == -2:
+        if permissions.gid == -2:
             sys.stderr.write("Error: No such group {0}{1}".format(permissions.group,os.linesep))
+            sys.exit(1)
+        if permissions.omode == -1:
+            sys.stderr.write("Error: Could not parse file mode {0}{1}".format(permissions.mode,os.linesep))
             sys.exit(1)
 
 def set_stanza_permissions(file,permissions):
@@ -123,17 +130,17 @@ def set_stanza_permissions(file,permissions):
         # Only attempt to set file permissions on Unix-like systems
         error=0
         try:
-            if permissions.omode() >= 0:
-                os.chmod(file,permissions.omode())
+            if permissions.omode >= 0:
+                os.chmod(file,permissions.omode)
             else:
                 raise Exception("Invalid permission")
         except:
-            sys.stderr.write("Warning: Could not change file permissions to {0}{1}".format(str(permissions.omode()),os.linesep))
+            sys.stderr.write("Warning: Could not change file permissions to {0}{1}".format(str(permissions.omode),os.linesep))
             error+=1
         try:
-            os.chown(file,permissions.uid(),permissions.gid())
+            os.chown(file,permissions.uid,permissions.gid)
         except:
-            sys.stderr.write("Warning: Could not set {0} ownership of {1}:{2} ({3}:{4}){5}".format(file,permissions.owner,permissions.group,str(permissions.uid()),str(permissions.gid()),os.linesep))
+            sys.stderr.write("Warning: Could not set {0} ownership of {1}:{2} ({3}:{4}){5}".format(file,permissions.owner,permissions.group,str(permissions.uid),str(permissions.gid),os.linesep))
             error+=1
         if error > 0:
             return 1
@@ -145,7 +152,7 @@ def includefile_name(includefile,url):
     if include_match != None:
         include=includefile.replace('\n','')
         include=include.rsplit('/', 1)[-1]
-    else:
+    elif url:
         include=url.rsplit('/', 1)[-1].lower() + ".txt"
     include_match=re.search('^.*\.txt$', include, re.IGNORECASE)
     if include_match != None:
@@ -159,8 +166,8 @@ def fetch_stanzas(urls):
     current_url_count=0
     for url in urls:
         stanza = Stanzas(url)
-        # Make request for web page - retry 3 times if failure detected
-        for retry in range(0,2):
+        # Make request for web page - retry if failure detected
+        for retry in range(general_settings['fetch_retry_count']):
             debug("request {0} for {1}".format(retry,url))
             try:
                 req = requests.get(url)
@@ -263,6 +270,7 @@ def main(argv):
     parser.add_option("-d", "--outdir", dest='outputdir', metavar='[output directory]', type='string', action='store', help="output stanza directory")
     parser.add_option("-u", "--url", dest='url', metavar='<url>', type='string', action='append', help="URL of stanza to extract")
     parser.add_option("--delay", dest='delay', metavar='[seconds]', type='int', action='store', help="Delay between fetch requests")
+    parser.add_option("--retry", dest='retry', metavar='[attempts]', type='int', action='store', help="Number of fetch retry attempts")
     parser.add_option("--debug", dest='debug', action='store_true', help="display debug information")
     group = optparse.OptionGroup(parser, "Posix options", "Options for Unix-like systems")
     group.add_option("-o", "--owner", dest='f_owner', metavar='[file owner]', type='string', action='store', help="owner of output files")
@@ -289,6 +297,8 @@ def main(argv):
         general_settings['stanza_directory']=options.outputdir
     if (options.delay):
         general_settings['fetch_delay_seconds']=options.delay
+    if (options.retry):
+        general_settings['fetch_retry_count']=options.delay
     if (options.debug):
         general_settings['debug']=options.debug
 
