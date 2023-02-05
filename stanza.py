@@ -47,9 +47,12 @@ class Stanzas:
 class File_permissions:
     def __init__(self, perms):
         if os.name == 'posix':
-            self.get_uid(perms['posix']['file_owner'])
-            self.get_gid(perms['posix']['file_group'])
-            self.get_mode(perms['posix']['file_mode'])
+            self.owner=perms['posix']['file_owner']
+            self.group=perms['posix']['file_group']
+            self.fmode=perms['posix']['file_mode']
+            self.get_uid(self.owner)
+            self.get_gid(self.group)
+            self.get_mode(self.fmode)
 
     if os.name == 'posix':
         # Permissions for Unix-like systems
@@ -135,7 +138,7 @@ def set_stanza_permissions(file,permissions):
             else:
                 raise Exception("Invalid permission")
         except:
-            sys.stderr.write("Warning: Could not change file permissions to {0}{1}".format(str(permissions.mode),os.linesep))
+            sys.stderr.write("Warning: Could not change file permissions to {0}{1}".format(str(permissions.fmode),os.linesep))
             error+=1
         try:
             os.chown(file,permissions.uid,permissions.gid)
