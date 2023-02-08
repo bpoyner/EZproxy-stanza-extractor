@@ -58,7 +58,8 @@ class File_permissions:
         # Permissions for Unix-like systems
         def get_uid(self,owner):
             if not owner:
-                return -1
+                self.uid = -1
+                return
             try:
                 # Get UID from username
                 uid = pwd.getpwnam(owner).pw_uid
@@ -67,7 +68,8 @@ class File_permissions:
             self.uid = uid
         def get_gid(self,group):
             if not group:
-                return -1
+                self.gid = -1
+                return
             try:
                 # Get GID from groupname
                 gid = grp.getgrnam(group).gr_gid
@@ -76,7 +78,8 @@ class File_permissions:
             self.gid = gid
         def get_mode(self,mode):
             if not mode:
-                return -1
+                self.mode = -1
+                return
             elif isinstance(mode, str):
                 # Mode is a string, convert to octal
                 try:
@@ -104,13 +107,13 @@ def stanza_check(stanza):
     """
     title_found = url_found = 0
     for line in io.StringIO(stanza):
-        title_match=re.search('^title\s+(.*)', line, re.IGNORECASE)
+        title_match=re.search('(^title\s+(.*)|^t\s+(.*))', line, re.IGNORECASE)
         if title_match != None:
             if '-hide' in title_match.group(1).lower():
                 # Not the primary title for this stanza
                 continue
             title_found=1
-        if re.search('^url\s+', line, re.IGNORECASE):
+        if re.search('(^url\s+|^u\s+)', line, re.IGNORECASE):
             url_found=1
         if title_found == 1 and url_found == 1:
             return 0
