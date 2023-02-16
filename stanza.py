@@ -43,6 +43,7 @@ class Stanzas:
         self._registry.append(self)
         self.url=url
         self.success=0
+        self.htmlcontent = ""
 
 class File_permissions:
     def __init__(self, perms):
@@ -167,7 +168,7 @@ def includefile_name(includefile,url):
         sys.stderr.write("Warning: Could not determine stanza file name for {0}".format(url))
         return "stanza.txt"
 
-def fetch_stanzas(urls):
+def fetch_urls(urls):
     total_url_count=len(urls)-1
     current_url_count=0
     for url in urls:
@@ -186,34 +187,41 @@ def fetch_stanzas(urls):
                 continue
             stanza.success=1
             break
+        stanza.status_code = req.status_code
         if stanza.success == 0:
             debug("request for {0} failed".format(url))
             continue
-        # Parse HTML with BeautifulSoup, find <pre> text
         debug("get request for {0} successful".format(url))
-        html = bs4.BeautifulSoup(req.content, "html5lib")
-        if (not html.find("pre")):
-            stanza.err_msg="Error: Could not find <pre> element in {0}".format(url)
-            stanza.success=0
-            continue
-        tags = html.find_all("pre")
-        stanza_text=tags[0].text
-        if len(tags) > 1:
-            includefile=includefile_name(tags[1].text,url)
-        else:
-            includefile=includefile_name('',url)
-        if stanza_check(stanza_text) == 1:
-            stanza.err_msg="Error: Stanza for {0} not appear to be valid format".format(url)
-            stanza.success=0
-            continue
-        stanza.success=1
-        stanza.stanza=stanza_text
-        stanza.outfile=includefile
+        stanza.htmlcontent = req.content
         if current_url_count < total_url_count:
             # as this is a web crawl, pause between requests
             debug("Delaying {0} seconds between requests".format(general_settings['fetch_delay_seconds']))
             time.sleep(general_settings['fetch_delay_seconds'])
             current_url_count += 1
+
+def parse_html():
+    for stanza in Stanzas._registry:
+        if stanza.success == 0:
+            continue
+        # Parse HTML with BeautifulSoup, find <pre> text
+        html = bs4.BeautifulSoup(stanza.htmlcontent, "html5lib")
+        if (not html.find("pre")):
+            stanza.err_msg="Error: Could not find <pre> element in {0}".format(stanza.url)
+            stanza.success=0
+            continue
+        tags = html.find_all("pre")
+        stanza_text=tags[0].text
+        if len(tags) > 1:
+            includefile=includefile_name(tags[1].text,stanza.url)
+        else:
+            includefile=includefile_name('',stanza.url)
+        if stanza_check(stanza_text) == 1:
+            stanza.err_msg="Error: Stanza for {0} not appear to be valid format".format(stanza.url)
+            stanza.success=0
+            continue
+        stanza.success=1
+        stanza.stanza=stanza_text
+        stanza.outfile=includefile
 
 def write_outfile(outfile,stanza,permissions):
     # Send to output file
@@ -319,7 +327,8 @@ def main(argv):
 
     permissions=File_permissions(stanza_file_permissions)
     check_permissions(permissions)
-    fetch_stanzas(urls)
+    fetch_urls(urls)
+    parse_html()
     output_stanzas(outfile,permissions)
     errors=display_errors()
     if errors > 0:
